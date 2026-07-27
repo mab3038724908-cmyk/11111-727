@@ -1,0 +1,54 @@
+schema: td25a.coverage_cleaner_contract.v1
+frame: base_link
+
+cleaning_geometry_at_x_home:
+  longitudinal_min_m: 0.20450
+  longitudinal_max_m: 0.56726
+  left_edge_m: 0.42700
+  right_edge_m: -0.55480
+  total_width_m: 0.98180
+
+x_stage:
+  executable_offset_min_m: -0.250
+  executable_offset_max_m: 0.0
+  positive_direction_note: "positive offset is body-left and is not supported"
+  fill_oscillation_enabled: false
+
+fill:
+  clean_width_m: 0.98180
+  spacing_ratio: 0.75
+  swath_spacing_m: 0.73635
+  theoretical_overlap_m: 0.24545
+  x_offset_m: 0.0
+
+right_edge:
+  desired_gap_m: 0.030
+  maximum_extension_m: 0.250
+  center_to_wall_min_m: 0.5848
+  center_to_wall_max_m: 0.8348
+  map_formula: "offset_m = -clamp(D - 0.5548 - 0.03, 0, 0.25)"
+  fixed_ultrasonic_channels: [10, 8]
+  moving_channel_excluded_while_extended: 9
+  forward_safety_channels: [4, 6, 7]
+
+profile:
+  required_equal_length_with_base_path: true
+  modes: [EDGE_CENTER, EDGE_RIGHT, EDGE_RETRACT, EDGE_IGNORE]
+  boundary_types: [PHYSICAL_WALL, PHYSICAL_OBSTACLE, DOOR, PARTITION_SEAM, SELECTION_BOUNDARY, OPEN_BOUNDARY]
+  retract_corner_threshold_deg: 28.0
+  transition_distance_m: 0.45
+
+runtime_constraints_visible_to_algorithm:
+  extended_threshold_m: 0.010
+  extended_motion: forward_only
+  extended_max_abs_angular_radps: 0.15
+  wait_for_actual_x_target: true
+  retract_before_reverse: true
+  retract_before_in_place_rotation: true
+
+acceptance:
+  minimum_actual_brush_coverage_ratio: 0.95
+  require_continuous_path: true
+  require_fixed_body_collision_free: true
+  require_moving_cleaner_collision_free: true
+  count_only_cleaning_enabled_points: true

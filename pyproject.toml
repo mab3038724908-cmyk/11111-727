@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "td25a-offline-coverage-planner"
+version = "2026.7.22"
+description = "Offline room-by-room coverage planner extracted from TD25A"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24,<3",
+  "Pillow>=9,<13",
+  "PyYAML>=6,<7",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src/td25a_robot_ui"}
+packages = [
+  "td25a_robot_ui",
+  "td25a_robot_ui.algorithms",
+  "td25a_robot_ui.store",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["src/td25a_robot_ui/test", "tests"]
+pythonpath = ["src/td25a_robot_ui"]
+addopts = "-ra"
+

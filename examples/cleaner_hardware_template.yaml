@@ -1,0 +1,50 @@
+# 由机械/电控实测后填写。null 表示未知，规划器必须 fail closed，不能猜测。
+schema_version: td25a.cleaner_hardware.v1
+
+mechanism:
+  # lateral_slide | telescopic | swing_arm | multi_dof
+  type: null
+  degrees_of_freedom: null
+  zero_definition: null
+  positive_direction: null
+
+joints:
+  # 示例字段；按真实机构改为一个或多个关节。
+  - name: cleaner_joint
+    unit: null
+    minimum: null
+    maximum: null
+    maximum_speed_per_s: null
+    maximum_acceleration_per_s2: null
+    maximum_deceleration_per_s2: null
+    reversal_time_s: null
+
+timing:
+  command_latency_typical_s: null
+  command_latency_worst_s: null
+  feedback_rate_hz: null
+  feedback_timeout_s: null
+  position_tolerance: null
+
+geometry:
+  # 每个关键关节状态下，车体系内的完整碰撞多边形与有效刷洗多边形。
+  body_axes: "+x_forward,+y_left"
+  collision_polygons_by_state: null
+  effective_cleaning_polygons_by_state: null
+
+safety:
+  retract_at_doorway: null
+  retract_during_reverse: null
+  retract_during_sharp_turn: null
+  retract_during_transfer: null
+  feedback_loss_policy: null
+  jam_policy: null
+  hard_limit_policy: null
+
+simulation_only_current_assumptions:
+  # 这些是现有离线模型，不是已确认的实物参数。
+  lateral_offset_min_m: -0.25
+  lateral_offset_max_m: 0.25
+  brush_x_min_m: 0.14
+  brush_x_max_m: 0.52
+  brush_half_width_m: 0.34

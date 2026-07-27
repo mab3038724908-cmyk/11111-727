@@ -1,0 +1,49 @@
+{
+  "export_date": "2026-07-22",
+  "source_commit": "2c7443e5b4337a6aae0787cddb220e5fbdcdf4a1",
+  "source_branch": "codex/continuous-normalized",
+  "planner_sha256": "0064b602424cf38602440b04143b3a0d70d4e037b2026918e3d565e743c03918",
+  "planner_entry": "td25a_robot_ui.algorithms.grid_coverage.plan_partitioned_coverage",
+  "robot_footprint_m": {
+    "front": 0.33,
+    "rear": 0.72,
+    "half_width": 0.34,
+    "turn_margin": 0.07
+  },
+  "brush_geometry_m": {
+    "x_min": 0.14,
+    "x_max": 0.52,
+    "half_width": 0.34,
+    "simulated_max_lateral_offset": 0.25
+  },
+  "ui_profile": {
+    "clean_width_m": 0.70,
+    "swath_spacing_factor": 0.75,
+    "effective_overlap_fraction": 0.25,
+    "swath_spacing_m": 0.525,
+    "path_step_m": 0.10,
+    "min_swath_m": 1.30,
+    "min_region_area_m2": 5.0,
+    "min_useful_region_area_m2": 15.0,
+    "min_useful_region_lane_m": 3.0,
+    "max_regions": 12,
+    "selection_policy": "sparse_graph"
+  },
+  "map9_reference": {
+    "reachable_area_m2": 348.2752,
+    "regions": 8,
+    "bcd_cells": 23,
+    "swaths": 44,
+    "points": 5271,
+    "hard_stops": 63,
+    "path_length_m": 466.3199,
+    "footprint_collisions": 0,
+    "path_continuous": true,
+    "coverage_complete": true,
+    "serviceable_coverage_ratio": 0.98434,
+    "actual_brush_coverage_ratio": 0.969893,
+    "centered_brush_coverage_ratio": 0.966405,
+    "cleaner_extension_gain_area_m2": 0.6784,
+    "avoidable_crossings_reference": 14
+  }
+}
