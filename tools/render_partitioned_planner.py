@@ -195,34 +195,6 @@ def find_simple_lane_transition(segments):
     return best
 
 
-def split_fill_connectors(segment):
-    """Recover only the non-cleaning paths between ordered swath endpoints."""
-    if segment.kind != "fill" or not segment.path or not segment.swaths:
-        return []
-    connectors = []
-    cursor = 0
-
-    def find_point(target, start_index):
-        for index in range(start_index, len(segment.path)):
-            if length((segment.path[index], target)) <= 1e-5:
-                return index
-        return None
-
-    for start, finish in segment.swaths:
-        start_index = find_point(start, cursor)
-        if start_index is None:
-            continue
-        if start_index > cursor:
-            connector = segment.path[cursor:start_index + 1]
-            if length(connector) > 1e-6:
-                connectors.append(connector)
-        finish_index = find_point(finish, start_index)
-        if finish_index is None:
-            continue
-        cursor = finish_index
-    return connectors
-
-
 def draw_number_marker(draw, point, pixel, label, scale,
                        outline_color="#facc15"):
     x, y = pixel(point)
@@ -331,10 +303,16 @@ def render(yaml_path: Path, output: Path, clip_polygon=None,
     for segment in plan.segments:
         if segment.kind == "fill":
             for lane in segment.swaths:
-                draw_arrowed(
-                    draw, lane, pixel, yellow, lane_width,
-                    max(1.0, length(lane) / 2.0),
-                )
+                draw.line([pixel(point) for point in lane], fill=yellow,
+                          width=lane_width, joint="curve")
+            # The stored segment path is the authoritative execution order:
+            # it contains every lane and each safe inter-lane/component
+            # connector.  Drawing arrows from it prevents a display-only gap
+            # or reversed arrow when individual swaths are viewed separately.
+            draw_arrowed(
+                draw, segment.path, pixel, yellow, connector_width,
+                max(0.80, length(segment.path) / 45.0),
+            )
     for segment in plan.segments:
         if segment.kind == "perimeter":
             draw_arrowed(
@@ -342,15 +320,10 @@ def render(yaml_path: Path, output: Path, clip_polygon=None,
                 max(1.2, length(segment.path) / 6.0),
             )
     for segment in plan.segments:
-        connector_paths = (
-            split_fill_connectors(segment)
-            if segment.kind == "fill" else
-            [segment.path] if segment.kind == "transfer" else []
-        )
-        for connector in connector_paths:
+        if segment.kind == "transfer":
             draw_arrowed(
-                draw, connector, pixel, yellow, connector_width,
-                max(0.28, length(connector) / 2.0),
+                draw, segment.path, pixel, yellow, connector_width,
+                max(0.28, length(segment.path) / 2.0),
             )
 
     transition_example = find_simple_lane_transition(plan.segments) if turn_detail else None
