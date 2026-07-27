@@ -110,7 +110,7 @@ def draw_arrowed(draw, points, pixel, color, width, interval_m):
     draw.line([pixel(point) for point in points], fill=color, width=width, joint="curve")
     next_arrow = interval_m
     walked = 0.0
-    arrow_size = max(6, width * 2)
+    arrow_size = max(3, int(width * 1.4))
     for start, end in zip(points, points[1:]):
         segment = math.hypot(end[0] - start[0], end[1] - start[1])
         if segment < 1e-9:
@@ -325,9 +325,9 @@ def render(yaml_path: Path, output: Path, clip_polygon=None,
         draw_dashed_polygon(draw, clip_polygon, pixel)
     # Operator-requested review palette: every fill/turn/transfer movement is
     # one clearly visible yellow route; red is only the edge-clean phase.
-    lane_width = max(5 if turn_detail else 3,
-                     int((2.2 if turn_detail else 3.0) * scale))
-    connector_width = max(3, int((1.2 if turn_detail else 1.8) * scale))
+    lane_width = max(2 if turn_detail else 1,
+                     int((1.2 if turn_detail else 0.85) * scale))
+    connector_width = max(1, int((0.8 if turn_detail else 0.65) * scale))
     for segment in plan.segments:
         if segment.kind == "fill":
             for lane in segment.swaths:
