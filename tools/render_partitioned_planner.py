@@ -104,10 +104,13 @@ def font(size, bold=False):
     return ImageFont.load_default()
 
 
-def draw_arrowed(draw, points, pixel, color, width, interval_m):
+def draw_arrowed(draw, points, pixel, color, width, interval_m,
+                 draw_line=True):
     if len(points) < 2:
         return
-    draw.line([pixel(point) for point in points], fill=color, width=width, joint="curve")
+    if draw_line:
+        draw.line([pixel(point) for point in points], fill=color, width=width,
+                  joint="curve")
     next_arrow = interval_m
     walked = 0.0
     arrow_size = max(3, int(width * 1.4))
@@ -195,6 +198,34 @@ def find_simple_lane_transition(segments):
     return best
 
 
+def split_fill_connectors(segment):
+    """Return the executed paths between consecutive ordered swaths."""
+    if segment.kind != "fill" or not segment.path or not segment.swaths:
+        return []
+    connectors = []
+    cursor = 0
+
+    def find_point(target, start_index):
+        for index in range(start_index, len(segment.path)):
+            if length((segment.path[index], target)) <= 1e-5:
+                return index
+        return None
+
+    for start, finish in segment.swaths:
+        start_index = find_point(start, cursor)
+        if start_index is None:
+            continue
+        if start_index > cursor:
+            connector = segment.path[cursor:start_index + 1]
+            if length(connector) > 1e-6:
+                connectors.append(connector)
+        finish_index = find_point(finish, start_index)
+        if finish_index is None:
+            continue
+        cursor = finish_index
+    return connectors
+
+
 def draw_number_marker(draw, point, pixel, label, scale,
                        outline_color="#facc15"):
     x, y = pixel(point)
@@ -214,7 +245,7 @@ def draw_number_marker(draw, point, pixel, label, scale,
 
 def render(yaml_path: Path, output: Path, clip_polygon=None,
            seed_override=None, selection_label=None, turn_detail=False,
-           focus_selection=False) -> dict:
+           focus_selection=False, yaw_override=None) -> dict:
     name = yaml_path.stem
     config, raw, grid, known_free, recovered = load_map(yaml_path)
     resolution = config["resolution"]
@@ -239,6 +270,7 @@ def render(yaml_path: Path, output: Path, clip_polygon=None,
     plan = plan_partitioned_coverage(
         grid.tobytes(), width, height, resolution, ox, oy,
         robot_world=seed,
+        robot_yaw=yaw_override,
         swath_spacing_m=coverage_swath_spacing(0.70, 0.75),
         clip_polygon=planning_polygon,
         selection_boundary_polygon=planning_polygon,
@@ -302,17 +334,25 @@ def render(yaml_path: Path, output: Path, clip_polygon=None,
     connector_width = max(1, int((0.8 if turn_detail else 0.65) * scale))
     for segment in plan.segments:
         if segment.kind == "fill":
+            # Paint the execution path once so its connectors remain visible.
+            # Connector arrows are added separately below, one per executed
+            # connector, so a long shared corridor stays readable.
+            draw.line([pixel(point) for point in segment.path], fill=yellow,
+                      width=connector_width, joint="curve")
             for lane in segment.swaths:
-                draw.line([pixel(point) for point in lane], fill=yellow,
-                          width=lane_width, joint="curve")
-            # The stored segment path is the authoritative execution order:
-            # it contains every lane and each safe inter-lane/component
-            # connector.  Drawing arrows from it prevents a display-only gap
-            # or reversed arrow when individual swaths are viewed separately.
-            draw_arrowed(
-                draw, segment.path, pixel, yellow, connector_width,
-                max(0.80, length(segment.path) / 45.0),
-            )
+                # Each sweep is rendered exactly once and receives one arrow
+                # at 60% of its length, preserving its execution direction
+                # without stacking arrowheads on a shared connector.
+                draw_arrowed(
+                    draw, lane, pixel, yellow, lane_width,
+                    max(0.01, length(lane) * 0.60),
+                )
+            for connector in split_fill_connectors(segment):
+                draw_arrowed(
+                    draw, connector, pixel, yellow, connector_width,
+                    max(0.01, length(connector) * 0.60),
+                    draw_line=False,
+                )
     for segment in plan.segments:
         if segment.kind == "perimeter":
             draw_arrowed(
@@ -438,6 +478,10 @@ def main():
         help="manual selection polygon as JSON [[x,y], ...]",
     )
     parser.add_argument("--seed", nargs=2, type=float, metavar=("X", "Y"))
+    parser.add_argument(
+        "--yaw-deg", type=float,
+        help="initial robot heading in degrees for offline preview",
+    )
     parser.add_argument("--label")
     parser.add_argument("--turn-detail", action="store_true")
     parser.add_argument("--focus-selection", action="store_true")
@@ -450,6 +494,8 @@ def main():
         selection_label=args.label,
         turn_detail=args.turn_detail,
         focus_selection=args.focus_selection,
+        yaw_override=(math.radians(args.yaw_deg)
+                      if args.yaw_deg is not None else None),
     ))
 
 

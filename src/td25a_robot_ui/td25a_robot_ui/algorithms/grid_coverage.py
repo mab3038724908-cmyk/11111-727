@@ -3873,14 +3873,22 @@ def _plan_partitioned_coverage_once(
             len(component[3]) for component in component_plans)
         monotonic_large_region = (
             adaptive_fragment_pruning
-            and chosen.area_m2 >= 100.0
-            and len(component_plans) >= 4
-            and len(component_plans) < 20
-            and not (
-                len(regions) == 1 and len(component_plans) >= 12)
-            and len(component_plans)
-            <= max(1.0, component_swath_count * 0.30)
-            and chosen.axis in ("x", "y"))
+            and (
+                (chosen.area_m2 >= 100.0
+                 and len(component_plans) >= 4
+                 and len(component_plans) < 20
+                 and not (
+                     len(regions) == 1 and len(component_plans) >= 12)
+                 and len(component_plans)
+                 <= max(1.0, component_swath_count * 0.30)
+                 and chosen.axis in ("x", "y"))
+                # A narrow, four-cell longitudinal room otherwise uses a
+                # greedy next-cell choice that can switch columns midway.
+                # Keep its BCD order monotonic so that one lateral transfer
+                # is deferred to a room end instead of crossing the fill.
+                or (40.0 <= chosen.area_m2 < 100.0
+                    and len(component_plans) == 4
+                    and chosen.axis == "y")))
         monotonic_perp_index = 1 if chosen.axis == "x" else 0
         monotonic_coordinates = [
             component[4][monotonic_perp_index]
@@ -4529,7 +4537,8 @@ def _plan_partitioned_coverage_once(
                         resolution, origin_x, origin_y, path_step_m,
                         body, max_se2_expansions=component_se2_budget,
                         rotation_safe_mask=rotation_safe_global,
-                        stencil_table_cache=se2_stencil_table_cache)
+                        stencil_table_cache=se2_stencil_table_cache,
+                        penalty_mask=connector_penalty)
                     if component_connector:
                         connector_strategy = "room_se2"
                 if not component_connector:
@@ -6562,29 +6571,51 @@ def plan_partitioned_coverage(
 
         attempts: List[PartitionedCoveragePlan] = []
         for profile_name, profile in profiles:
-            selected = _plan_partitioned_coverage_once(
-                **profile,
-                exit_aware_enabled=True,
-                region_order_mode="current_graph",
-                avoid_completed_route_transfers=True,
-                avoid_future_component_swaths=True,
-                avoid_future_region_swaths=True,
-                refine_inter_region_transfers=True,
-                refine_against_all_routes=True,
-                refine_transfer_reverse=True,
-                refine_same_region_transfers=True,
-                refine_max_extra_turns=2,
-            )
-            selected.quality_metrics = _partitioned_route_quality(
-                selected, resolution, origin_x, origin_y)
-            selected.selection_mode = profile_name
-            attempts.append(selected)
-            if (selected.coverage_complete
-                    and selected.footprint_valid
-                    and selected.footprint_violation_count == 0
-                    and selected.path_continuous
-                    and selected.actual_brush_coverage_ratio >= 0.95):
-                return selected
+            profile_candidates: List[PartitionedCoveragePlan] = []
+            for order_mode in ("current_graph", "station_graph"):
+                selected = _plan_partitioned_coverage_once(
+                    **profile,
+                    exit_aware_enabled=True,
+                    region_order_mode=order_mode,
+                    avoid_completed_route_transfers=True,
+                    hard_avoid_completed_route_transfers=True,
+                    avoid_future_component_swaths=True,
+                    avoid_future_region_swaths=True,
+                    refine_inter_region_transfers=True,
+                    refine_against_all_routes=True,
+                    refine_transfer_reverse=True,
+                    refine_same_region_transfers=True,
+                    refine_max_extra_turns=2,
+                )
+                selected.quality_metrics = _partitioned_route_quality(
+                    selected, resolution, origin_x, origin_y)
+                selected.selection_mode = f"{profile_name}_{order_mode}"
+                profile_candidates.append(selected)
+            attempts.extend(profile_candidates)
+            valid_candidates = [
+                candidate for candidate in profile_candidates
+                if (candidate.coverage_complete
+                    and candidate.footprint_valid
+                    and candidate.footprint_violation_count == 0
+                    and candidate.path_continuous
+                    and candidate.actual_brush_coverage_ratio >= 0.95)
+            ]
+            if valid_candidates:
+                return min(
+                    valid_candidates,
+                    key=lambda candidate: (
+                        candidate.quality_metrics.get(
+                            "avoidable_crossings", float("inf")),
+                        candidate.quality_metrics.get(
+                            "avoidable_repeat_ratio", float("inf")),
+                        candidate.quality_metrics.get(
+                            "avoidable_repeat_samples", float("inf")),
+                        candidate.quality_metrics.get(
+                            "transfer_length_m", float("inf")),
+                        candidate.quality_metrics.get(
+                            "path_length_m", float("inf")),
+                    ),
+                )
         # Preserve the most useful diagnostic if every adaptive level fails.
         return max(
             attempts,
