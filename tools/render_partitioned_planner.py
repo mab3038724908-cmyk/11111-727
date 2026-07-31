@@ -226,24 +226,6 @@ def split_fill_connectors(segment):
     return connectors
 
 
-def visible_perimeter_runs(segment, hide_edge_ignore):
-    if not hide_edge_ignore or not segment.cleaner_profile:
-        return [segment.path]
-    runs = []
-    run = []
-    for point, command in zip(segment.path, segment.cleaner_profile):
-        if command.mode.value != "EDGE_IGNORE":
-            run.append(point)
-        elif len(run) >= 2:
-            runs.append(run)
-            run = []
-        else:
-            run = []
-    if len(run) >= 2:
-        runs.append(run)
-    return runs
-
-
 def draw_number_marker(draw, point, pixel, label, scale,
                        outline_color="#facc15"):
     x, y = pixel(point)
@@ -263,8 +245,7 @@ def draw_number_marker(draw, point, pixel, label, scale,
 
 def render(yaml_path: Path, output: Path, clip_polygon=None,
            seed_override=None, selection_label=None, turn_detail=False,
-           focus_selection=False, yaw_override=None,
-           hide_edge_ignore=False) -> dict:
+           focus_selection=False, yaw_override=None) -> dict:
     name = yaml_path.stem
     config, raw, grid, known_free, recovered = load_map(yaml_path)
     resolution = config["resolution"]
@@ -374,11 +355,10 @@ def render(yaml_path: Path, output: Path, clip_polygon=None,
                 )
     for segment in plan.segments:
         if segment.kind == "perimeter":
-            for run in visible_perimeter_runs(segment, hide_edge_ignore):
-                draw_arrowed(
-                    draw, run, pixel, red, max(3, int(2.8 * scale)),
-                    max(1.2, length(run) / 6.0),
-                )
+            draw_arrowed(
+                draw, segment.path, pixel, red, max(3, int(2.8 * scale)),
+                max(1.2, length(segment.path) / 6.0),
+            )
     for segment in plan.segments:
         if segment.kind == "transfer":
             draw_arrowed(
@@ -505,7 +485,6 @@ def main():
     parser.add_argument("--label")
     parser.add_argument("--turn-detail", action="store_true")
     parser.add_argument("--focus-selection", action="store_true")
-    parser.add_argument("--hide-edge-ignore", action="store_true")
     args = parser.parse_args()
     clip_polygon = json.loads(args.clip_json) if args.clip_json else None
     print(render(
@@ -517,7 +496,6 @@ def main():
         focus_selection=args.focus_selection,
         yaw_override=(math.radians(args.yaw_deg)
                       if args.yaw_deg is not None else None),
-        hide_edge_ignore=args.hide_edge_ignore,
     ))
 
 
