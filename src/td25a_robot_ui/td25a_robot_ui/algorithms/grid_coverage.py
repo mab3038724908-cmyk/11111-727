@@ -5128,12 +5128,26 @@ def _plan_partitioned_coverage_once(
 
     # BCD and room masks exist only to order interior fill.  Their boundaries
     # are not walls, so their already-certified loops become transit paths and
-    # one perimeter is traced from the global turn-safe component instead.
+    # one rounded perimeter is traced only around fill that still needs it.
     for segment in segments:
         if segment.kind == "perimeter":
             segment.kind = "transfer"
+    fill_target = np.zeros_like(turn_safe, dtype=bool)
+    for region in regions:
+        fill_target |= region.mask
+    fill_paths = [
+        segment.path for segment in segments if segment.kind == "fill"]
+    fill_cleaned = _polylines_cleaning_mask(
+        fill_target.shape, fill_paths, resolution, origin_x, origin_y,
+        clean_width_m)
+    uncovered_fill = np.zeros_like(fill_target, dtype=bool)
+    for component in _connected_components_fast(fill_target, min_cells=1):
+        component_ratio = float((fill_cleaned & component).sum()) / max(
+            1, int(component.sum()))
+        if component_ratio < 0.99:
+            uncovered_fill |= component
     global_components = _connected_components_fast(
-        turn_safe, min_cells=max(1, int(math.ceil(0.20 / resolution ** 2))))
+        uncovered_fill, min_cells=max(1, int(math.ceil(0.20 / resolution ** 2))))
     global_ring: List[Point] = []
     if global_components:
         global_component = max(global_components, key=lambda item: int(item.sum()))
@@ -5153,6 +5167,14 @@ def _plan_partitioned_coverage_once(
                     source_ring, max(0.10, resolution * 1.5),
                     global_component, resolution, origin_x, origin_y),
                     path_step_m)
+            rounded_ring = _fillet_corners(
+                global_ring, turn_safe, resolution, origin_x, origin_y,
+                radius_m=0.55, path_step_m=path_step_m)
+            rounded_valid, _ = validate_footprint_path(
+                raw_free, rounded_ring, resolution, origin_x, origin_y,
+                footprint=body, lookahead_m=0.55)
+            if rounded_valid:
+                global_ring = rounded_ring
     if global_ring:
         variants = _ring_start_variants(
             global_ring, global_path[-1], path_step_m, turn_safe,
@@ -5177,7 +5199,8 @@ def _plan_partitioned_coverage_once(
                     path=variant, from_region_id=visit_order[-1],
                     to_region_id=visit_order[-1]))
                 break
-    if not any(segment.kind == "perimeter" for segment in segments):
+    if global_components and not any(
+            segment.kind == "perimeter" for segment in segments):
         failures.append("global_perimeter_missing")
 
     refined_transfer_count = 0
