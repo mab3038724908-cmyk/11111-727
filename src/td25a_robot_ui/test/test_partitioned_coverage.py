@@ -128,22 +128,28 @@ def test_large_l_is_decomposed_and_each_region_finishes_before_next():
     assert plan.footprint_valid
     assert plan.path_continuous
 
-    # Once a region's segments end, it is never revisited.  Within every region
-    # all blue fill segments precede its red perimeter segments.
+    # Once a region's segments end, it is never revisited.  BCD fill remains
+    # room-scoped, while one red perimeter follows every fill phase.
     compressed = []
     for segment in plan.segments:
         if not compressed or compressed[-1] != segment.region_id:
             compressed.append(segment.region_id)
     assert compressed == plan.visit_order
-    for region_id in plan.visit_order:
-        kinds = [
-            segment.kind for segment in plan.segments
-            if segment.region_id == region_id
-        ]
-        assert "fill" in kinds
-        assert "perimeter" in kinds
-        assert max(i for i, kind in enumerate(kinds) if kind == "fill") < min(
-            i for i, kind in enumerate(kinds) if kind == "perimeter")
+    assert all(any(
+        segment.kind == "fill" and segment.region_id == region_id
+        for segment in plan.segments)
+        for region_id in plan.visit_order)
+    perimeter_indices = [
+        index for index, segment in enumerate(plan.segments)
+        if segment.kind == "perimeter"
+    ]
+    fill_indices = [
+        index for index, segment in enumerate(plan.segments)
+        if segment.kind == "fill"
+    ]
+    assert len(perimeter_indices) == 1
+    assert perimeter_indices[0] > max(fill_indices)
+    assert plan.segments[perimeter_indices[0]].region_id == plan.visit_order[-1]
 
 
 def test_lane_and_phase_boundaries_are_monotonic_hard_stops():
@@ -337,13 +343,19 @@ def test_four_rooms_use_door_connected_order_and_clean_corridor_once():
         if not compressed or compressed[-1] != segment.region_id:
             compressed.append(segment.region_id)
     assert compressed == plan.visit_order
-    for region_id in plan.visit_order:
-        kinds = [
-            segment.kind for segment in plan.segments
-            if segment.region_id == region_id]
-        assert "fill" in kinds and "perimeter" in kinds
-        assert max(i for i, kind in enumerate(kinds) if kind == "fill") < min(
-            i for i, kind in enumerate(kinds) if kind == "perimeter")
+    assert all(any(
+        segment.kind == "fill" and segment.region_id == region_id
+        for segment in plan.segments)
+        for region_id in plan.visit_order)
+    perimeter_indices = [
+        index for index, segment in enumerate(plan.segments)
+        if segment.kind == "perimeter"]
+    fill_indices = [
+        index for index, segment in enumerate(plan.segments)
+        if segment.kind == "fill"]
+    assert len(perimeter_indices) == 1
+    assert perimeter_indices[0] > max(fill_indices)
+    assert plan.segments[perimeter_indices[0]].region_id == plan.visit_order[-1]
 
 
 def test_cluttered_bcd_connectors_reduce_crossings_and_absolute_retrace():
@@ -548,8 +560,12 @@ def test_three_levels_of_rooms_are_not_merged_into_the_long_corridor():
     # corridor and then failed its mandatory perimeter pass.
     assert len(plan.regions) == 7
     assert len(plan.visit_order) == 7
-    for region_id in plan.visit_order:
-        kinds = [
-            segment.kind for segment in plan.segments
-            if segment.region_id == region_id]
-        assert "fill" in kinds and "perimeter" in kinds
+    assert all(any(
+        segment.kind == "fill" and segment.region_id == region_id
+        for segment in plan.segments)
+        for region_id in plan.visit_order)
+    perimeter_indices = [
+        index for index, segment in enumerate(plan.segments)
+        if segment.kind == "perimeter"]
+    assert len(perimeter_indices) == 1
+    assert plan.segments[perimeter_indices[0]].region_id == plan.visit_order[-1]

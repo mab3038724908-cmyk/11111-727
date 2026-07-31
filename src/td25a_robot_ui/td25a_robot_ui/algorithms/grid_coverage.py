@@ -3205,7 +3205,7 @@ def _plan_partitioned_coverage_once(
     cleaner_wall_gap_m: float = 0.03,
     cleaner_transition_distance_m: float = 0.45,
 ) -> PartitionedCoveragePlan:
-    """Plan room-by-room ``fill -> perimeter -> transfer`` coverage offline.
+    """Plan BCD fill by room, then one global physical-boundary perimeter.
 
     This entry point is intentionally independent from the existing online
     execution state machine.  It returns phase metadata for review images and
@@ -5125,6 +5125,60 @@ def _plan_partitioned_coverage_once(
         all_swaths.extend(ordered)
         visit_order.append(chosen.region_id)
         current_region_id = chosen.region_id
+
+    # BCD and room masks exist only to order interior fill.  Their boundaries
+    # are not walls, so their already-certified loops become transit paths and
+    # one perimeter is traced from the global turn-safe component instead.
+    for segment in segments:
+        if segment.kind == "perimeter":
+            segment.kind = "transfer"
+    global_components = _connected_components_fast(
+        turn_safe, min_cells=max(1, int(math.ceil(0.20 / resolution ** 2))))
+    global_ring: List[Point] = []
+    if global_components:
+        global_component = max(global_components, key=lambda item: int(item.sum()))
+        global_rings = _trace_perimeter_rings(
+            global_component, resolution, origin_x, origin_y,
+            step_m=path_step_m, min_ring_cells=8)
+        if global_rings:
+            source_ring = max(
+                global_rings,
+                key=lambda ring: _polyline_area(ring, path_step_m * 2.5))
+            global_ring = _elasticize_perimeter_ring(
+                source_ring, global_component, travel_reachable,
+                travel_reachable, turn_safe, raw_free, resolution,
+                origin_x, origin_y, path_step_m, body, clean_width_m)
+            if not global_ring:
+                global_ring = _densify_polyline(_rdp_masked(
+                    source_ring, max(0.10, resolution * 1.5),
+                    global_component, resolution, origin_x, origin_y),
+                    path_step_m)
+    if global_ring:
+        variants = _ring_start_variants(
+            global_ring, global_path[-1], path_step_m, turn_safe,
+            resolution, origin_x, origin_y)
+        for variant in variants:
+            connector = _connect_points_footprint_safe(
+                travel_reachable, turn_safe, raw_free, global_path[-1],
+                variant[0], resolution, origin_x, origin_y, path_step_m,
+                body, rotation_safe_mask=rotation_safe_global,
+                stencil_table_cache=se2_stencil_table_cache)
+            valid, _ = validate_footprint_path(
+                raw_free, variant, resolution, origin_x, origin_y,
+                footprint=body, lookahead_m=0.55)
+            if connector and valid:
+                if _dist(connector[0], connector[-1]) > 1e-6:
+                    append_segment(CoverageSegment(
+                        kind="transfer", region_id=visit_order[-1],
+                        path=connector, from_region_id=visit_order[-1],
+                        to_region_id=visit_order[-1]))
+                append_segment(CoverageSegment(
+                    kind="perimeter", region_id=visit_order[-1],
+                    path=variant, from_region_id=visit_order[-1],
+                    to_region_id=visit_order[-1]))
+                break
+    if not any(segment.kind == "perimeter" for segment in segments):
+        failures.append("global_perimeter_missing")
 
     refined_transfer_count = 0
     refined_transfer_crossing_reduction = 0
